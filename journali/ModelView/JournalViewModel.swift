@@ -4,7 +4,6 @@
 //
 //  Created by RON on 02/06/1448 AH.
 //
-
 import SwiftUI
 import Combine
 
@@ -14,22 +13,25 @@ enum SortOption {
 }
 
 class JournalViewModel: ObservableObject {
+    // تخزين الجورنال محليًا.
     @AppStorage("saved_journals_data")
     private var savedJournalsData: Data = Data()
 
     @Published var journals: [JournalEntry] = [] {
-        // يحفظ البيانات تلقائيًا عند الإضافة أو التعديل أو الحذف.
+        // حفظ البيانات عند الإضافة أو التعديل أو الحذف.
         didSet {
             saveToAppStorage()
         }
     }
 
+    // خيار ترتيب الجورنال.
     @Published var sortOption: SortOption = .entryDate {
         didSet {
             objectWillChange.send()
         }
     }
 
+    // نص البحث.
     @Published var searchText: String = "" {
         didSet {
             objectWillChange.send()
@@ -40,6 +42,7 @@ class JournalViewModel: ObservableObject {
         loadFromAppStorage()
     }
 
+    // تجهيز نتائج البحث وترتيبها للعرض.
     var displayedJournals: [JournalEntry] {
         let filtered = searchText.isEmpty ? journals : journals.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
@@ -48,20 +51,25 @@ class JournalViewModel: ObservableObject {
 
         switch sortOption {
         case .entryDate:
-            // يعرض كل الجورنال، الأحدث أولًا.
+            // عرض الجورنال من الأحدث إلى الأقدم.
             return filtered.sorted {
                 $0.date > $1.date
             }
 
         case .bookmark:
-            // يحافظ على تعديلنا السابق:
-            // يعرض فقط الجورنال اللي عليها بوك مارك، الأحدث أولًا.
-            return filtered
-                .filter { $0.isBookmarked }
-                .sorted { $0.date > $1.date }
+            // عرض الكل، والجورنال اللي عليها بوك مارك أولًا.
+            return filtered.sorted {
+                if $0.isBookmarked != $1.isBookmarked {
+                    return $0.isBookmarked
+                }
+
+                // الأحدث أولًا داخل كل مجموعة.
+                return $0.date > $1.date
+            }
         }
     }
 
+    // إضافة جورنال جديدة أو تعديل الموجودة.
     func saveJournal(
         existing: JournalEntry?,
         title: String,
@@ -83,6 +91,7 @@ class JournalViewModel: ObservableObject {
         }
     }
 
+    // إضافة البوك مارك أو إزالته.
     func toggleBookmark(for entry: JournalEntry) {
         if let index = journals.firstIndex(where: {
             $0.id == entry.id
@@ -92,23 +101,21 @@ class JournalViewModel: ObservableObject {
         }
     }
 
-    // جديد: يحذف الجورنال المطلوبة باستخدام معرّفها الفريد.
-    // نستخدم id عشان نحذف العنصر الصحيح حتى أثناء البحث أو الفلترة.
+    // حذف الجورنال باستخدام معرّفها.
     func deleteJournal(_ entry: JournalEntry) {
         journals.removeAll {
             $0.id == entry.id
         }
-
-        // ما نحتاج نستدعي الحفظ هنا؛
-        // تغيير journals يشغّل didSet ويحفظ النتيجة تلقائيًا.
     }
 
+    // تحويل البيانات إلى JSON وحفظها.
     private func saveToAppStorage() {
         if let encoded = try? JSONEncoder().encode(journals) {
             savedJournalsData = encoded
         }
     }
 
+    // استرجاع الجورنال المحفوظة.
     private func loadFromAppStorage() {
         if let decoded = try? JSONDecoder().decode(
             [JournalEntry].self,
