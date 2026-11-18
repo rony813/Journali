@@ -8,24 +8,23 @@
 import SwiftUI
 
 struct JournalEmptyStateView: View {
-    // إدارة الجورنال والبحث والفرز.
+    // Journal data, sorting, and searching.
     @StateObject private var viewModel = JournalViewModel()
 
-    // إدارة المايك وتحويل الكلام إلى نص.
+    // Microphone and speech recognition.
     @StateObject private var speechSearch = SpeechSearchViewModel()
 
-    // التحكم بلوحة المفاتيح.
     @FocusState private var isSearchFocused: Bool
 
-    // فتح نافذة الإضافة أو التعديل.
+    // Create and edit sheets.
     @State private var showNewJournalSheet = false
     @State private var selectedEntryToEdit: JournalEntry? = nil
 
-    // بيانات تنبيه الحذف.
+    // Delete confirmation.
     @State private var entryToDelete: JournalEntry? = nil
     @State private var showDeleteAlert = false
 
-    // شريط بحث مخصص بخامة النظام وزر المايك.
+    // Search bar with voice search.
     private var searchBar: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
@@ -43,7 +42,7 @@ struct JournalEmptyStateView: View {
                 }
                 .accessibilityLabel("Search journals")
 
-            // مسح نص البحث.
+            // Clear the search text.
             if !viewModel.searchText.isEmpty &&
                 !speechSearch.isRecording {
                 Button {
@@ -55,7 +54,7 @@ struct JournalEmptyStateView: View {
                 .accessibilityLabel("Clear search")
             }
 
-            // بدء التسجيل أو إيقافه.
+            // Start or stop voice search.
             Button {
                 isSearchFocused = false
 
@@ -99,13 +98,12 @@ struct JournalEmptyStateView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // خلفية التطبيق.
                 AppColors.backgroundPrimary
                     .ignoresSafeArea()
 
                 if !viewModel.searchText.isEmpty &&
                     viewModel.displayedJournals.isEmpty {
-                    // حالة البحث بدون نتائج.
+                    // Search has no matching entries.
                     ContentUnavailableView {
                         Label(
                             "No Results",
@@ -119,7 +117,7 @@ struct JournalEmptyStateView: View {
                         .foregroundStyle(AppColors.textSecondary)
                     }
                 } else if viewModel.journals.isEmpty {
-                    // شاشة البداية بدون جورنال.
+                    // No entries have been created.
                     VStack(spacing: 16) {
                         Image("Image2")
                             .resizable()
@@ -142,23 +140,38 @@ struct JournalEmptyStateView: View {
                         maxWidth: .infinity,
                         maxHeight: .infinity
                     )
+                } else if viewModel.sortOption == .bookmarkedOnly &&
+                            viewModel.displayedJournals.isEmpty {
+                    // The bookmark-only filter has no entries.
+                    ContentUnavailableView {
+                        Label(
+                            "No Bookmarked Journals",
+                            systemImage: "bookmark"
+                        )
+                        .foregroundStyle(AppColors.textAccent)
+                    } description: {
+                        Text(
+                            "Bookmark a journal to see it here."
+                        )
+                        .foregroundStyle(AppColors.textSecondary)
+                    }
                 } else {
-                    // قائمة الجورنال مع دعم السحب.
                     List {
                         ForEach(viewModel.displayedJournals) { entry in
+                            // Journal card and bookmark action.
                             JournalCardView(entry: entry) {
                                 viewModel.toggleBookmark(for: entry)
                             }
                             .contentShape(Rectangle())
 
-                            // فتح الجورنال للتعديل.
+                            // Open the selected entry.
                             .onTapGesture {
                                 speechSearch.stopRecording()
                                 isSearchFocused = false
                                 selectedEntryToEdit = entry
                             }
 
-                            // إظهار زر الحذف عند السحب.
+                            // Reveal the delete button by swiping.
                             .swipeActions(
                                 edge: .trailing,
                                 allowsFullSwipe: false
@@ -177,7 +190,7 @@ struct JournalEmptyStateView: View {
                                 .tint(.red)
                             }
 
-                            // الحفاظ على شكل الكروت.
+                            // Preserve the card appearance.
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                             .listRowInsets(
@@ -199,7 +212,7 @@ struct JournalEmptyStateView: View {
             .toolbarTitleDisplayMode(.inlineLarge)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    // خيارات الفرز والبوك مارك.
+                    // Native sorting and filtering menu.
                     Menu {
                         Button("Sort by Bookmark") {
                             viewModel.sortOption = .bookmark
@@ -208,13 +221,18 @@ struct JournalEmptyStateView: View {
                         Button("Sort by Entry Date") {
                             viewModel.sortOption = .entryDate
                         }
+
+                        // New: show bookmarked entries only.
+                        Button("Show Bookmarked Only") {
+                            viewModel.sortOption = .bookmarkedOnly
+                        }
                     } label: {
                         Image(
                             systemName: "line.3.horizontal.decrease"
                         )
                     }
 
-                    // إضافة جورنال جديدة.
+                    // Create a new entry.
                     Button {
                         speechSearch.stopRecording()
                         isSearchFocused = false
@@ -225,7 +243,7 @@ struct JournalEmptyStateView: View {
                 }
             }
 
-            // تثبيت شريط البحث أسفل الشاشة.
+            // Keep the search bar at the bottom.
             .safeAreaInset(edge: .bottom) {
                 searchBar
                     .padding(.horizontal, 20)
@@ -233,19 +251,19 @@ struct JournalEmptyStateView: View {
                     .padding(.bottom, 8)
             }
 
-            // تحويل الكلام إلى بحث مباشر.
+            // Update search results while speaking.
             .onChange(of: speechSearch.transcript) { _, newText in
                 viewModel.searchText = newText
             }
 
-            // إيقاف المايك عند بدء الكتابة.
+            // Stop recording when typing begins.
             .onChange(of: isSearchFocused) { _, focused in
                 if focused {
                     speechSearch.stopRecording()
                 }
             }
 
-            // تأكيد الحذف الأصلي من Apple.
+            // Native delete confirmation.
             .alert(
                 "Delete Journal?",
                 isPresented: $showDeleteAlert,
@@ -270,12 +288,12 @@ struct JournalEmptyStateView: View {
         }
         .preferredColorScheme(.dark)
 
-        // إيقاف المايك عند مغادرة الشاشة.
+        // Stop recording when leaving the screen.
         .onDisappear {
             speechSearch.stopRecording()
         }
 
-        // إيقاف التسجيل عند انتقال التطبيق للخلفية.
+        // Stop recording when the app becomes inactive.
         .onReceive(
             NotificationCenter.default.publisher(
                 for: UIApplication.willResignActiveNotification
@@ -284,7 +302,7 @@ struct JournalEmptyStateView: View {
             speechSearch.stopRecording()
         }
 
-        // تنبيه مشاكل الأذونات أو التسجيل.
+        // Display voice-search errors.
         .alert(
             "Voice Search",
             isPresented: Binding(
@@ -305,13 +323,13 @@ struct JournalEmptyStateView: View {
             Text(speechSearch.errorMessage ?? "")
         }
 
-        // نافذة إضافة جورنال.
+        // New-entry sheet.
         .sheet(isPresented: $showNewJournalSheet) {
             JournalEditorView(viewModel: viewModel)
                 .preferredColorScheme(.dark)
         }
 
-        // نافذة تعديل الجورنال المختارة.
+        // Edit-entry sheet.
         .sheet(item: $selectedEntryToEdit) { entry in
             JournalEditorView(
                 viewModel: viewModel,
@@ -322,7 +340,6 @@ struct JournalEmptyStateView: View {
     }
 }
 
-// معاينة الواجهة.
 #Preview {
     JournalEmptyStateView()
 }

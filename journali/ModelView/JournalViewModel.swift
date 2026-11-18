@@ -4,34 +4,34 @@
 //
 //  Created by RON on 02/06/1448 AH.
 //
+
 import SwiftUI
 import Combine
 
 enum SortOption {
     case entryDate
     case bookmark
+    case bookmarkedOnly
 }
 
 class JournalViewModel: ObservableObject {
-    // تخزين الجورنال محليًا.
+    // Store journal data locally.
     @AppStorage("saved_journals_data")
     private var savedJournalsData: Data = Data()
 
     @Published var journals: [JournalEntry] = [] {
-        // حفظ البيانات عند الإضافة أو التعديل أو الحذف.
+        // Save automatically when entries change.
         didSet {
             saveToAppStorage()
         }
     }
 
-    // خيار ترتيب الجورنال.
     @Published var sortOption: SortOption = .entryDate {
         didSet {
             objectWillChange.send()
         }
     }
 
-    // نص البحث.
     @Published var searchText: String = "" {
         didSet {
             objectWillChange.send()
@@ -42,7 +42,7 @@ class JournalViewModel: ObservableObject {
         loadFromAppStorage()
     }
 
-    // تجهيز نتائج البحث وترتيبها للعرض.
+    // Apply search, then the selected sorting or filtering option.
     var displayedJournals: [JournalEntry] {
         let filtered = searchText.isEmpty ? journals : journals.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
@@ -51,25 +51,31 @@ class JournalViewModel: ObservableObject {
 
         switch sortOption {
         case .entryDate:
-            // عرض الجورنال من الأحدث إلى الأقدم.
+            // Show all matching entries, newest first.
             return filtered.sorted {
                 $0.date > $1.date
             }
 
         case .bookmark:
-            // عرض الكل، والجورنال اللي عليها بوك مارك أولًا.
+            // Show all matching entries, bookmarked entries first.
             return filtered.sorted {
                 if $0.isBookmarked != $1.isBookmarked {
                     return $0.isBookmarked
                 }
 
-                // الأحدث أولًا داخل كل مجموعة.
                 return $0.date > $1.date
             }
+
+        case .bookmarkedOnly:
+            // Show bookmarked entries only, newest first.
+            // Other entries remain saved.
+            return filtered
+                .filter { $0.isBookmarked }
+                .sorted { $0.date > $1.date }
         }
     }
 
-    // إضافة جورنال جديدة أو تعديل الموجودة.
+    // Create an entry or update an existing one.
     func saveJournal(
         existing: JournalEntry?,
         title: String,
@@ -91,7 +97,7 @@ class JournalViewModel: ObservableObject {
         }
     }
 
-    // إضافة البوك مارك أو إزالته.
+    // Add or remove a bookmark.
     func toggleBookmark(for entry: JournalEntry) {
         if let index = journals.firstIndex(where: {
             $0.id == entry.id
@@ -101,21 +107,21 @@ class JournalViewModel: ObservableObject {
         }
     }
 
-    // حذف الجورنال باستخدام معرّفها.
+    // Permanently delete the selected entry.
     func deleteJournal(_ entry: JournalEntry) {
         journals.removeAll {
             $0.id == entry.id
         }
     }
 
-    // تحويل البيانات إلى JSON وحفظها.
+    // Encode entries and save them locally.
     private func saveToAppStorage() {
         if let encoded = try? JSONEncoder().encode(journals) {
             savedJournalsData = encoded
         }
     }
 
-    // استرجاع الجورنال المحفوظة.
+    // Restore saved entries.
     private func loadFromAppStorage() {
         if let decoded = try? JSONDecoder().decode(
             [JournalEntry].self,
